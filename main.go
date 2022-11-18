@@ -36,7 +36,13 @@ var (
 	},
 		[]string{"redis"},
 	)
-	RedisAddress = flag.String("redis", "127.0.0.1:6379", "redis addresses")
+	failedReq = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "redis_request_fail",
+		Help: "Counter redis key set fails",
+	},
+		[]string{"redis"},
+	)
+	RedisAddress = flag.String("redis", "127.0.0.1:6379", "redis cluster addresses")
 	RedisKey     = flag.String("key", "test", "test-key name prefix")
 )
 
@@ -58,7 +64,12 @@ func findValues(a [60]float64) (min float64, max float64, avg float64) {
 			max = value
 		}
 	}
-	return min, max, sum / float64(count)
+	if count > 0 {
+		return min, max, sum / float64(count)
+	} else {
+		return 60, 60, 60
+	}
+
 }
 
 func collect(redis_address string, key string) {
@@ -80,7 +91,8 @@ func collect(redis_address string, key string) {
 		duration := time.Since(start)
 
 		if err != nil {
-			results[i] = 60
+			results[i] = -1
+			failedReq.With(prometheus.Labels{"redis": string(redis_address)}).Inc()
 		} else {
 			results[i] = duration.Seconds()
 		}
@@ -102,6 +114,7 @@ func main() {
 	prometheus.MustRegister(avgReqTime)
 	prometheus.MustRegister(minReqTime)
 	prometheus.MustRegister(maxReqTime)
+	prometheus.MustRegister(failedReq)
 	go collect(*RedisAddress, *RedisKey)
 	http.Handle("/metrics", promhttp.Handler())
 	http.ListenAndServe(":9379", nil)
