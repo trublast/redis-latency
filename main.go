@@ -115,6 +115,7 @@ func main() {
 	prometheus.MustRegister(minReqTime)
 	prometheus.MustRegister(maxReqTime)
 	prometheus.MustRegister(failedReq)
+	failedReq.With(prometheus.Labels{"redis": string(*RedisAddress)}).Add(0)
 	go collect(*RedisAddress, *RedisKey)
 	http.Handle("/metrics", promhttp.Handler())
 	http.ListenAndServe(":9379", nil)
